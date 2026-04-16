@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<!-- Netdata Dashboard for RPi - compatible with Netdata v2 -->
+<html lang="en">
+<head>
+    <title>NetData Dashboard for RPi</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #222831;
+            color: #eeeeee;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            padding: 8px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.1em;
+            color: #cccccc;
+            margin: 6px 0 10px;
+            letter-spacing: 1px;
+        }
+        .section { margin-bottom: 10px; }
+        .section-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.85em;
+            color: #999;
+            border-bottom: 1px solid #444;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .chart-row { display: flex; gap: 8px; }
+        .chart-row + .chart-row { margin-top: 8px; }
+        .chart-box {
+            flex: 1;
+            background: #2d3340;
+            border-radius: 6px;
+            padding: 8px 10px;
+            min-width: 0;
+        }
+        .chart-title {
+            font-size: 0.78em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .gauge-row {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .gauge-box {
+            text-align: center;
+            background: #2d3340;
+            border-radius: 6px;
+            padding: 8px 12px 6px;
+            width: 130px;
+        }
+        .gauge-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        .gauge-label { font-size: 0.75em; color: #888; margin-top: 2px; }
+        #status-bar {
+            text-align: center;
+            font-size: 0.72em;
+            color: #555;
+            margin-top: 6px;
+        }
+        #status-dot {
+            display: inline-block;
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #555;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+        #footer {
+            text-align: center;
+            font-size: 0.72em;
+            color: #555;
+            margin-top: 8px;
+        }
+        #footer a { color: #555; }
+        #time-selector { text-align: center; margin-bottom: 10px; }
+        .time-btn, #btn-refresh {
+            background: #2d3340;
+            color: #888;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 14px;
+            margin: 0 3px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-family: inherit;
+        }
+        .time-btn:hover, #btn-refresh:hover { background: #383e4a; color: #ccc; }
+        .time-btn.active { background: #22AA99; color: #fff; border-color: #22AA99; }
+        #btn-refresh { margin-left: 10px; border-color: #555; }
+    </style>
+</head>
+<body>
+    <h1>Raspberry Pi Dashboard</h1>
+
+    <div id="time-selector">
+        <button class="time-btn active" data-w="-300"   onclick="setWindow(-300,   true)">5m ライブ</button>
+        <button class="time-btn"        data-w="-3600"  onclick="setWindow(-3600,  false)">1h</button>
+        <button class="time-btn"        data-w="-21600" onclick="setWindow(-21600, false)">6h</button>
+        <button class="time-btn"        data-w="-86400" onclick="setWindow(-86400, false)">24h</button>
+        <button id="btn-refresh" style="display:none" onclick="updateAll()">↺ 更新</button>
+    </div>
+
+    <!-- Overview gauges -->
+    <div class="section">
+        <div class="section-title">Overview</div>
+        <div class="gauge-row">
+            <div class="gauge-box">
+                <canvas id="gauge-cpu" height="70"></canvas>
+                <div class="gauge-value" id="val-cpu" style="color:#22AA99">--</div>
+                <div class="gauge-label">CPU</div>
+            </div>
+            <div class="gauge-box">
+                <canvas id="gauge-temp" height="70"></canvas>
+                <div class="gauge-value" id="val-temp" style="color:#CC5577">--</div>
+                <div class="gauge-label">Temperature</div>
+            </div>
+            <div class="gauge-box">
+                <canvas id="gauge-disk" height="70"></canvas>
+                <div class="gauge-value" id="val-disk" style="color:#4499CC">--</div>
+                <div class="gauge-label">Disk Free</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CPU -->
+    <div class="section">
+        <div class="section-title">CPU</div>
+        <div class="chart-row">
+            <div class="chart-box">
+                <div class="chart-title">System CPU (%)</div>
+                <canvas id="chart-cpu" height="60"></canvas>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">CPU Frequency (MHz)</div>
+                <canvas id="chart-cpufreq" height="60"></canvas>
+            </div>
+        </div>
+        <div class="chart-row">
+            <div class="chart-box">
+                <div class="chart-title">System Load</div>
+                <canvas id="chart-load" height="60"></canvas>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">CPU Temperature (°C)</div>
+                <canvas id="chart-temp" height="60"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory -->
+    <div class="section">
+        <div class="section-title">Memory</div>
+        <div class="chart-row">
+            <div class="chart-box">
+                <div class="chart-title">System RAM (MB)</div>
+                <canvas id="chart-ram" height="60"></canvas>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">System SWAP (MB)</div>
+                <canvas id="chart-swap" height="60"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- I/Os -->
+    <div class="section">
+        <div class="section-title">I/Os</div>
+        <div class="chart-row">
+            <div class="chart-box">
+                <div class="chart-title">Disk I/O (KB/s)</div>
+                <canvas id="chart-io" height="60"></canvas>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Network Traffic (KB/s)</div>
+                <canvas id="chart-net" height="60"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span id="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+    </div>
+    <div id="diag-panel" style="font-size:0.65em;color:#666;background:#1a1e26;padding:6px 10px;border-radius:4px;margin-top:8px;word-break:break-all;display:none;">
+        <strong style="color:#888">API Diagnostic:</strong> <span id="diag-result"></span>
+    </div>
+    <p id="footer">Netdata dashboard for Raspberry Pi &mdash;
+        <a href="https://signal-flag-z.blogspot.com/">Signal Flag Z</a></p>
+
+<script>
+// ============================================================
+// Config
+// ============================================================
+const MAX_POINTS = 60;   // data points shown in chart
+const UPDATE_MS  = 3000; // live update interval (ms)
+
+const TEMP_CHART = 'sensors.temperature_cpu_thermal-virtual-0_temp1_input';
+
+// ============================================================
+// State
+// ============================================================
+const charts    = {};
+const chartRows = {};
+let currentWindow  = -300;   // seconds (negative = relative to now)
+let isLive         = true;
+let liveIntervalId = null;
+
+// ============================================================
+// Chart.js global defaults
+// ============================================================
+Chart.defaults.color       = '#888';
+Chart.defaults.borderColor = '#333';
+
+const scaleBase = () => ({
+    x: { ticks: { maxTicksLimit: 6, font: { size: 10 } }, grid: { color: '#383e4a' } },
+    y: { ticks: { font: { size: 10 } },                   grid: { color: '#383e4a' } }
+});
+
+// ============================================================
+// Init helpers
+// ============================================================
+function initGauge(id, color) {
+    charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [0, 100], backgroundColor: [color, '#3a3f4b'], borderWidth: 0 }] },
+        options: {
+            responsive: true,
+            animation: { duration: 400 },
+            rotation: -90,
+            circumference: 180,
+            cutout: '68%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } }
+        }
+    });
+}
+
+function initLine(id, dsDefs, yMin, yMax) {
+    const scales = scaleBase();
+    if (yMin != null) scales.y.min = yMin;
+    if (yMax != null) scales.y.max = yMax;
+
+    charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: dsDefs.map(ds => ({
+                label:           ds.label,
+                borderColor:     ds.color,
+                backgroundColor: ds.color + '33',
+                data: [],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.2,
+            }))
+        },
+        options: {
+            responsive: true,
+            animation: false,
+            plugins: {
+                legend: {
+                    display: dsDefs.length > 1,
+                    labels: { font: { size: 10 }, boxWidth: 10, padding: 6 }
+                },
+                tooltip: { enabled: true }
+            },
+            scales
+        }
+    });
+}
+
+// ============================================================
+// Gauge update
+// ============================================================
+function setGauge(id, value, min, max) {
+    const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+    charts[id].data.datasets[0].data = [pct, 100 - pct];
+    charts[id].update('none');
+}
+
+// ============================================================
+// API fetch
+//   after: negative = relative seconds, positive = Unix ts
+// ============================================================
+async function fetchData(chart, after, points) {
+    try {
+        const url = points
+            ? `/api/v1/data?chart=${encodeURIComponent(chart)}&after=${after}&points=${points}&format=json`
+            : `/api/v1/data?chart=${encodeURIComponent(chart)}&after=${after}&format=json`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) {
+            console.warn(`[netdata] ${chart} → HTTP ${r.status}`);
+            return null;
+        }
+        const j = await r.json();
+        const result = j.result || j;
+        if (!result.data || result.data.length === 0) {
+            console.debug(`[netdata] ${chart} → empty data (labels: ${JSON.stringify(result.labels)})`);
+        }
+        return result;
+    } catch (e) {
+        console.error(`[netdata] ${chart} → error:`, e);
+        return null;
+    }
+}
+
+// ============================================================
+// Replace chart data (full refresh each cycle, sorted ascending)
+// ============================================================
+function appendRows(chartId, rows, extractFn) {
+    if (!rows || !Array.isArray(rows)) {
+        console.warn(`[netdata] appendRows(${chartId}): rows is`, rows);
+        return 0;
+    }
+    const c = charts[chartId];
+
+    // Clear existing data
+    c.data.labels = [];
+    c.data.datasets.forEach(ds => ds.data = []);
+
+    // Sort ascending (Netdata v2 may return newest-first)
+    const sorted = [...rows].sort((a, b) => a[0] - b[0]);
+
+    sorted.forEach(row => {
+        const ts = row[0];
+        const dt = new Date(ts * 1000);
+        const label = dt.getHours().toString().padStart(2,'0') + ':' +
+                      dt.getMinutes().toString().padStart(2,'0') + ':' +
+                      dt.getSeconds().toString().padStart(2,'0');
+        c.data.labels.push(label);
+        try {
+            extractFn(row).forEach((v, i) => c.data.datasets[i].data.push(v));
+        } catch(e) {
+            console.error(`[netdata] appendRows(${chartId}) extractFn error:`, e);
+        }
+    });
+
+    // Trim oldest data beyond MAX_POINTS
+    while (c.data.labels.length > MAX_POINTS) {
+        c.data.labels.shift();
+        c.data.datasets.forEach(ds => ds.data.shift());
+    }
+
+    const count = c.data.labels.length;
+    if (count > 0) {
+        chartRows[chartId] = (chartRows[chartId] || 0) + 1;
+        c.update();
+    }
+    return count;
+}
+
+// ============================================================
+// Fetch window
+// ============================================================
+function fetchWindow() {
+    return { after: currentWindow, points: MAX_POINTS };
+}
+
+// ============================================================
+// Time window selector
+// ============================================================
+function setWindow(seconds, live) {
+    currentWindow = seconds;
+    isLive = live;
+
+    document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.time-btn[data-w="${seconds}"]`);
+    if (btn) btn.classList.add('active');
+    document.getElementById('btn-refresh').style.display = live ? 'none' : 'inline-block';
+
+    if (liveIntervalId) { clearInterval(liveIntervalId); liveIntervalId = null; }
+    if (live) { liveIntervalId = setInterval(updateAll, UPDATE_MS); }
+
+    updateAll();
+}
+
+// ============================================================
+// Individual chart updaters
+// ============================================================
+async function updateCPU() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('system.cpu', after, points);
+    if (!d) return;
+
+    const added = appendRows('chart-cpu', d.data, row => {
+        let sum = 0;
+        for (let i = 1; i < row.length; i++) sum += (row[i] || 0);
+        return [Math.min(100, Math.max(0, sum))];
+    });
+
+    if (added > 0) {
+        const ds = charts['chart-cpu'].data.datasets[0].data;
+        const last = ds[ds.length - 1];
+        setGauge('gauge-cpu', last, 0, 100);
+        document.getElementById('val-cpu').textContent = last.toFixed(1) + '%';
+    }
+}
+
+async function updateTemp() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData(TEMP_CHART, after, points);
+    if (!d) return;
+
+    const added = appendRows('chart-temp', d.data, row => [row[1] || 0]);
+
+    if (added > 0) {
+        const ds = charts['chart-temp'].data.datasets[0].data;
+        const last = ds[ds.length - 1];
+        setGauge('gauge-temp', last, 20, 85);
+        document.getElementById('val-temp').textContent = last.toFixed(1) + '°C';
+    }
+}
+
+async function updateCPUFreq() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('cpu.cpufreq', after, points);
+    if (!d) return;
+    const numCores = d.labels.length - 1;
+    appendRows('chart-cpufreq', d.data, row => {
+        let s = 0;
+        for (let i = 1; i <= numCores; i++) s += (row[i] || 0);
+        return [numCores ? s / numCores : 0];
+    });
+}
+
+async function updateLoad() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('system.load', after, points);
+    if (!d) return;
+    appendRows('chart-load', d.data, row => [row[1] || 0, row[2] || 0]);
+}
+
+async function updateRAM() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('system.ram', after, points);
+    if (!d) return;
+    const ui = d.labels.indexOf('used');
+    const ci = d.labels.indexOf('cached');
+    const bi = d.labels.indexOf('buffers');
+    appendRows('chart-ram', d.data, row => [
+        Math.abs(row[ui] || 0),
+        Math.abs(row[ci] || 0),
+        Math.abs(row[bi] || 0),
+    ]);
+}
+
+async function updateSWAP() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('mem.swap', after, points);
+    if (!d) return;
+    const ui = d.labels.indexOf('used');
+    appendRows('chart-swap', d.data, row => [Math.abs(row[ui] || 0)]);
+}
+
+async function updateIO() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('system.io', after, points);
+    if (!d) return;
+    appendRows('chart-io', d.data, row => [Math.abs(row[1] || 0), Math.abs(row[2] || 0)]);
+}
+
+async function updateNet() {
+    const { after, points } = fetchWindow();
+    const d = await fetchData('system.net', after, points);
+    if (!d) return;
+    appendRows('chart-net', d.data, row => [Math.abs(row[1] || 0), Math.abs(row[2] || 0)]);
+}
+
+async function updateDisk() {
+    const d = await fetchData('disk_space./', -60, 1);
+    if (!d || !d.data || !d.data.length) return;
+    const row      = d.data[d.data.length - 1];
+    const availIdx = d.labels.indexOf('avail');
+    const usedIdx  = d.labels.indexOf('used');
+    if (availIdx < 0 || usedIdx < 0) return;
+    const avail = Math.abs(row[availIdx]);
+    const used  = Math.abs(row[usedIdx]);
+    setGauge('gauge-disk', avail, 0, avail + used);
+    document.getElementById('val-disk').textContent = avail.toFixed(1) + 'GB';
+}
+
+// ============================================================
+// Status indicator
+// ============================================================
+let updateCount = 0;
+function setStatus(ok) {
+    const dot  = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    dot.style.background = ok ? '#22AA99' : '#CC5577';
+    text.textContent = ok
+        ? 'Live · ' + new Date().toLocaleTimeString() + '  (update #' + updateCount + ')'
+        : 'Error · ' + new Date().toLocaleTimeString();
+}
+
+// ============================================================
+// Main update loop
+// ============================================================
+async function updateAll() {
+    updateCount++;
+    const results = await Promise.allSettled([
+        updateCPU(), updateTemp(), updateCPUFreq(), updateLoad(),
+        updateRAM(), updateSWAP(), updateIO(), updateNet(), updateDisk()
+    ]);
+
+    // Show live chart stats in diag panel (first 10 cycles)
+    {
+        const modeLabel = isLive ? '● Live'
+            : { '-3600': '1h', '-21600': '6h', '-86400': '24h' }[String(currentWindow)] || '?';
+        const el = document.getElementById('diag-result');
+        if (el) {
+            const hasErr = results.some(r => r.status === 'rejected');
+            el.textContent = `${modeLabel} · #${updateCount} · ${new Date().toLocaleTimeString()}`;
+            el.style.color = hasErr ? '#DDAA33' : '#22AA99';
+        }
+    }
+
+    setStatus(true);
+}
+
+// ============================================================
+// Bootstrap
+// ============================================================
+function init() {
+    initGauge('gauge-cpu',  '#22AA99');
+    initGauge('gauge-temp', '#CC5577');
+    initGauge('gauge-disk', '#4499CC');
+
+    initLine('chart-cpu',     [{ label: 'CPU%',    color: '#22AA99' }], 0, 100);
+    initLine('chart-cpufreq', [{ label: 'MHz',     color: '#55AADD' }]);
+    initLine('chart-load',    [{ label: 'load1',   color: '#AACC55' },
+                                { label: 'load5',   color: '#DDAA33' }]);
+    initLine('chart-temp',    [{ label: '°C',      color: '#CC5577' }], 20, 85);
+    initLine('chart-ram',     [{ label: 'used',    color: '#66BB44' },
+                                { label: 'cached',  color: '#4488CC' },
+                                { label: 'buffers', color: '#AA7733' }]);
+    initLine('chart-swap',    [{ label: 'used',    color: '#CC7744' }]);
+    initLine('chart-io',      [{ label: 'reads',   color: '#7755CC' },
+                                { label: 'writes',  color: '#CC5555' }]);
+    initLine('chart-net',     [{ label: 'recv',    color: '#33AACC' },
+                                { label: 'sent',    color: '#CC9933' }]);
+
+    setWindow(-300, true); // ライブモードで開始
+}
+
+// ============================================================
+// Startup diagnostic (shows on page + console)
+// ============================================================
+async function runDiagnostic() {
+    const panel = document.getElementById('diag-panel');
+    const el    = document.getElementById('diag-result');
+    panel.style.display = 'block';
+    try {
+        const r = await fetch('/api/v1/data?chart=system.cpu&after=-60&points=3&format=json');
+        if (!r.ok) {
+            el.textContent = `HTTP ${r.status} – Netdata API not responding`;
+            el.style.color = '#CC5577';
+            return;
+        }
+        const j = await r.json();
+        const keys = Object.keys(j);
+        const src  = j.result || j;
+        const rows = (src.data || []).length;
+        const lbl  = (src.labels || []).slice(0, 5);
+        el.textContent = `OK  keys:[${keys.join(',')}]  labels:${JSON.stringify(lbl)}  data_rows:${rows}`;
+        el.style.color = rows > 0 ? '#22AA99' : '#DDAA33';
+        if (rows === 0) el.textContent += '  ← data empty!';
+        console.log('[diag] Full response:', j);
+    } catch(e) {
+        el.textContent = `FETCH ERROR: ${e.message}`;
+        el.style.color = '#CC5577';
+    }
+}
+
+init();
+runDiagnostic();
+</script>
+</body>
+</html>
